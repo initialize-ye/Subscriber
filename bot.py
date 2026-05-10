@@ -10,6 +10,7 @@ def main() -> None:
     driver.register_adapter(OneBotV11Adapter)
     nonebot.load_plugin("nonebot_plugin_apscheduler")
     nonebot.load_plugin("nonebot_bison")
+    nonebot.load_plugins("my_plugins")
     nonebot.run()
 
 
