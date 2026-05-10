@@ -101,14 +101,9 @@ jobs:
             "$PROJECT_DIR/.venv/bin/pip" install -r requirements.txt -q --no-cache-dir
             echo "✓ 依赖已更新"
 
-            # 7. 安装 Playwright Chromium（仅首次）
+            # 7. 安装 Playwright Chromium（可选，失败不影响运行）
             echo -e "\n${GREEN}[6/9] 检查 Playwright${NC}"
-            if [ ! -d "$HOME/.cache/ms-playwright" ]; then
-              echo "安装 Playwright Chromium..."
-              "$PROJECT_DIR/.venv/bin/playwright" install --with-deps chromium
-            else
-              echo "✓ Playwright 已安装"
-            fi
+            "$PROJECT_DIR/.venv/bin/playwright" install chromium 2>/dev/null && echo "✓ Playwright 已安装" || echo -e "${YELLOW}⚠ Playwright 安装跳过（htmlrender 会自动处理）${NC}"
 
             # 8. 语法检查
             echo -e "\n${GREEN}[7/9] 语法检查${NC}"
