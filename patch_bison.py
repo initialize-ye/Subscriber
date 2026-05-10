@@ -248,4 +248,20 @@ else:
 with open(weibo_path, "w") as f:
     f.write(content)
 
+# ====== 7. weibo _get_current_user_name uses proxy ======
+weibo_path = os.path.join(BASE, "platform/weibo.py")
+with open(weibo_path, "r") as f:
+    content = f.read()
+
+old = 'async with http_client() as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)'
+new = 'async with http_client(proxy="http://127.0.0.1:7890") as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)'
+
+if old in content:
+    content = content.replace(old, new)
+    with open(weibo_path, "w") as f:
+        f.write(content)
+    print("7/7 weibo _get_current_user_name proxy applied")
+else:
+    print("7/7 SKIP: pattern not found (already patched?)")
+
 print("\nAll patches applied!")
