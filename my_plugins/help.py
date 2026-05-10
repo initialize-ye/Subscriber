@@ -1,14 +1,8 @@
 from nonebot import on_command
-from nonebot.adapters import Message
-from nonebot.params import EventToMe
-from nonebot.rule import Rule
+from nonebot.adapters.onebot.v11 import Message
+from nonebot.rule import to_me
 
-
-def _help_rule(to_me: bool = EventToMe()) -> bool:
-    return to_me
-
-
-help_matcher = on_command("help", aliases={"帮助", "?"}, rule=Rule(_help_rule), priority=8, block=True)
+help_matcher = on_command("help", aliases={"帮助", "?"}, rule=to_me(), priority=8, block=True)
 
 HELP_TEXT = """订阅管理：
   添加订阅 - 交互式添加 B站/微博 订阅
