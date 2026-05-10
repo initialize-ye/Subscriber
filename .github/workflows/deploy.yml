@@ -101,9 +101,15 @@ jobs:
             "$PROJECT_DIR/.venv/bin/pip" install -r requirements.txt -q --no-cache-dir
             echo "✓ 依赖已更新"
 
-            # 7. 安装 Playwright Chromium（可选，失败不影响运行）
+            # 7. 检查 Playwright Chromium（本地已有则跳过下载）
             echo -e "\n${GREEN}[6/9] 检查 Playwright${NC}"
-            "$PROJECT_DIR/.venv/bin/playwright" install chromium 2>/dev/null && echo "✓ Playwright 已安装" || echo -e "${YELLOW}⚠ Playwright 安装跳过（htmlrender 会自动处理）${NC}"
+            CHROME_PATH="$HOME/.local/share/nonebot2/nonebot_plugin_htmlrender/chromium_headless_shell-1217"
+            if [ -f "$CHROME_PATH/chrome-headless-shell-linux64/chrome-headless-shell" ] || [ -d "$HOME/.cache/ms-playwright/chromium-1217" ]; then
+              echo "✓ Playwright 浏览器已安装"
+            else
+              echo "安装 Playwright Chromium..."
+              "$PROJECT_DIR/.venv/bin/playwright" install chromium 2>/dev/null || echo -e "${YELLOW}⚠ 下载失败（htmlrender 会自动处理）${NC}"
+            fi
 
             # 8. 语法检查
             echo -e "\n${GREEN}[7/9] 语法检查${NC}"
