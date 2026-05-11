@@ -10,7 +10,8 @@ HELP_TEXT = """订阅管理：
   删除订阅 - 删除订阅
 
 Cookie 管理：
-  添加cookie - 为微博等平台添加 Cookie
+  添加cookie - 添加 Cookie
+  查看cookie - 查看已添加的 Cookie
   关联cookie - 为订阅关联 Cookie
   取消关联cookie - 取消 Cookie 关联
   删除cookie - 删除 Cookie
