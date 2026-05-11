@@ -2,8 +2,26 @@
 
 import os
 import re
+import sys
+from pathlib import Path
 
-BASE = "/home/ubuntu/Subscriber/.venv/lib/python3.12/site-packages/nonebot_bison"
+# Auto-detect bison package path: prefer .venv in project root, fallback to sys.prefix
+_project_root = Path(__file__).resolve().parent
+_venv_site = _project_root / ".venv" / "Lib" / "site-packages" / "nonebot_bison"
+if _venv_site.is_dir():
+    BASE = str(_venv_site)
+else:
+    # Fallback for production Ubuntu server
+    BASE = "/home/ubuntu/Subscriber/.venv/lib/python3.12/site-packages/nonebot_bison"
+    if not os.path.isdir(BASE):
+        # Last resort: resolve from import
+        import importlib.util as _util
+        _spec = _util.find_spec("nonebot_bison")
+        if _spec and _spec.origin:
+            BASE = str(Path(_spec.origin).parent)
+        else:
+            print("ERROR: cannot find nonebot_bison package")
+            sys.exit(1)
 
 TOTAL_STEPS = 8
 
@@ -18,7 +36,16 @@ def _write(path: str, content: str) -> None:
         f.write(content)
 
 
-def _step(n: int, msg: str) -> None:
+def _assert_patched(content: str, old: str, name: str) -> None:
+    """Verify old pattern is GONE from patched content."""
+    if old in content:
+        print(f"WARN: {name} — pattern still present, patch may have failed")
+
+
+def _assert_not_patched(content: str, new: str, name: str) -> None:
+    """Verify new pattern IS in patched content."""
+    if new not in content:
+        print(f"WARN: {name} — new pattern not found, patch may have failed")
     print(f"[{n}/{TOTAL_STEPS}] {msg}")
 
 
@@ -63,6 +90,9 @@ for fp in [
     "platform/ceobecanteen/platform.py",
 ]:
     path = os.path.join(BASE, fp)
+    if not os.path.isfile(path):
+        _step(2, f"SKIP (not found): {fp}")
+        continue
     content = _read(path)
     content = re.sub(r"\benabled\s*=\s*True", "enabled = False", content)
     content = re.sub(r"\bis_common\s*=\s*True", "is_common = False", content)
@@ -110,6 +140,7 @@ new_parse = (
 )
 if old_parse in weibo and parse_end > 0:
     weibo = weibo[: weibo.index(old_parse)] + new_parse + weibo[parse_end:]
+    _assert_not_patched(weibo, 'raise cls.ParseTargetException(prompt="正确格式:\\n1. 用户数字UID (如 7618923072)', "step 4")
     _step(4, "weibo parse_target fixed")
 else:
     _step(4, "weibo parse_target SKIP (pattern not found)")
@@ -120,6 +151,7 @@ weibo = weibo.replace(
     'name = await self._get_current_user_name(json.loads(content) if content.strip().startswith("{") else '
     "dict((k.strip(), v.strip()) for k, v in (item.strip().split('=', 1) for item in content.split(';') if '=' in item)))",
 )
+_assert_not_patched(weibo, 'dict((k.strip(), v.strip())', "step 5")
 _step(5, "weibo cookie format fix applied")
 
 # 6. Add proxy to _get_current_user_name
@@ -128,18 +160,28 @@ weibo = weibo.replace(
     'async with http_client(proxy="http://127.0.0.1:7890") as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)',
 )
 _step(6, "weibo _get_current_user_name proxy applied")
+_assert_not_patched(weibo, 'http_client(proxy="http://127.0.0.1:7890")', "step 6")
 
-# 7. Add get_query_name_client with proxy (after get_client)
-old_client = """    @override
+# 7. Add proxy to get_query_name_client (fix: replace entire block, not just append)
+old_block = """    @override
     async def get_client(self, target: Target | None) -> AsyncClient:
         client = await super().get_client(target)
+
+        if len(client.cookies) == 0:
+            client.cookies.update({"dummycookie": "1"})
+
+        return client
+
+    @classmethod
+    async def get_query_name_client(cls) -> AsyncClient:
+        client = http_client()
 
         if len(client.cookies) == 0:
             client.cookies.update({"dummycookie": "1"})
 
         return client"""
 
-new_client = """    @override
+new_block = """    @override
     async def get_client(self, target: Target | None) -> AsyncClient:
         client = await super().get_client(target)
 
@@ -148,18 +190,18 @@ new_client = """    @override
 
         return client
 
-    @override
+    @classmethod
     async def get_query_name_client(cls) -> AsyncClient:
-        from nonebot_bison.utils.http import http_client
         client = http_client(proxy="http://127.0.0.1:7890")
+
         if len(client.cookies) == 0:
             client.cookies.update({"dummycookie": "1"})
-        return client
 
-    @classmethod"""
+        return client"""
 
-if old_client in weibo:
-    weibo = weibo.replace(old_client, new_client)
+if old_block in weibo:
+    weibo = weibo.replace(old_block, new_block)
+    _assert_not_patched(weibo, 'http_client(proxy="http://127.0.0.1:7890")\n\n        if len(client.cookies) == 0', "step 7")
     _step(7, "weibo proxy configured")
 else:
     _step(7, "weibo proxy SKIP (pattern not found)")

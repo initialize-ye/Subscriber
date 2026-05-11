@@ -97,7 +97,7 @@ jobs:
             NEW_COMMIT=$(git rev-parse HEAD)
             echo "新提交: $NEW_COMMIT"
 
-            # 4. 检查是否有更新
+            # 检查是否有更新
             if [ "$CURRENT_COMMIT" = "$NEW_COMMIT" ]; then
               echo -e "${YELLOW}⚠ 代码无变化，跳过部署${NC}"
               exit 0
@@ -130,15 +130,17 @@ jobs:
               "$PROJECT_DIR/.venv/bin/playwright" install chromium 2>/dev/null || echo -e "${YELLOW}⚠ 下载失败（htmlrender 会自动处理）${NC}"
             fi
 
-            # 8. 语法检查
+            # 8. 语法检查（所有 Python 文件）
             echo -e "\n${GREEN}[8/10] 语法检查${NC}"
-            if "$PROJECT_DIR/.venv/bin/python" -m py_compile bot.py 2>/dev/null; then
-              echo "✓ 语法检查通过"
-            else
-              echo -e "${RED}✗ 语法错误，回滚部署${NC}"
-              git reset --hard "$CURRENT_COMMIT"
-              exit 1
-            fi
+            for pyfile in bot.py my_plugins/help.py my_plugins/cookie_mgr.py patch_bison.py; do
+              if "$PROJECT_DIR/.venv/bin/python" -m py_compile "$PROJECT_DIR/$pyfile" 2>/dev/null; then
+                echo "  ✓ $pyfile"
+              else
+                echo -e "${RED}  ✗ $pyfile 语法错误，回滚部署${NC}"
+                git reset --hard "$CURRENT_COMMIT"
+                exit 1
+              fi
+            done
 
             # 9. 检查配置
             echo -e "\n${GREEN}[9/10] 检查配置${NC}"
