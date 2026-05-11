@@ -23,7 +23,7 @@ else:
             print("ERROR: cannot find nonebot_bison package")
             sys.exit(1)
 
-TOTAL_STEPS = 8
+TOTAL_STEPS = 12
 
 
 def _read(path: str) -> str:
@@ -270,5 +270,63 @@ if "import httpx" not in add_cookie:
 
 _write(add_cookie_path, add_cookie)
 _step(8, "add_cookie feedback improved")
+
+# ====== 9. Unify cancel messages ======
+for _file, _old, _new in [
+    ("del_sub.py", '"删除中止"', '"已取消删除"'),
+    ("del_cookie.py", '"删除中止"', '"已取消删除"'),
+    ("del_cookie_target.py", '"取消关联中止"', '"已取消关联"'),
+    ("add_sub.py", '"已中止订阅"', '"已取消订阅"'),
+    ("add_cookie.py", '"已中止添加cookie"', '"已取消添加 Cookie"'),
+]:
+    _path = os.path.join(BASE, "sub_manager", _file)
+    if not os.path.isfile(_path):
+        _step(9, f"SKIP (not found): {_file}")
+        continue
+    _content = _read(_path)
+    if _old in _content:
+        _content = _content.replace(_old, _new)
+        _write(_path, _content)
+        _step(9, f"cancel msg: {_file}")
+    else:
+        _step(9, f"SKIP (pattern not found): {_file}")
+
+# ====== 10. Improve vague error messages ======
+for _file, _name in [("del_sub.py", "del_sub"), ("del_cookie.py", "del_cookie"), ("del_cookie_target.py", "del_cookie_target")]:
+    _path = os.path.join(BASE, "sub_manager", _file)
+    if not os.path.isfile(_path):
+        continue
+    _content = _read(_path)
+    _old = f'except Exception:\n            await {_name}.reject("删除错误")'
+    _new = f'except Exception as e:\n            logger.exception(f"删除失败: {{e}}")\n            await {_name}.reject("删除失败，请查看日志或联系管理员")'
+    if _old in _content:
+        _content = _content.replace(_old, _new)
+        if "logger" not in _content and 'from nonebot.log import logger' not in _content:
+            _content = _content.replace(
+                "from nonebot.matcher import Matcher",
+                "from nonebot.log import logger\nfrom nonebot.matcher import Matcher",
+            )
+        _write(_path, _content)
+        _step(10, f"error msg: {_file}")
+    else:
+        _step(10, f"SKIP: {_file}")
+
+# ====== 11. Fix expire_time in group_manage ======
+_init_path = os.path.join(BASE, "sub_manager/__init__.py")
+_init_content = _read(_init_path)
+if 'expire_time=datetime.now()' in _init_content:
+    _init_content = _init_content.replace(
+        'expire_time=datetime.now()',
+        'expire_time=datetime.now() + timedelta(minutes=5)',
+    )
+    if 'timedelta' not in _init_content:
+        _init_content = _init_content.replace(
+            "from datetime import datetime",
+            "from datetime import datetime, timedelta",
+        )
+    _write(_init_path, _init_content)
+    _step(11, "group_manage expire_time fixed")
+else:
+    _step(11, "SKIP: expire_time pattern not found")
 
 print("\nAll patches applied!")
