@@ -64,7 +64,7 @@ jobs:
             echo "分支: ${{ github.ref_name }}"
 
             # 1. 进入项目目录（首次部署时自动克隆）
-            echo -e "\n${GREEN}[1/9] 进入项目目录${NC}"
+            echo -e "\n${GREEN}[1/10] 进入项目目录${NC}"
             if [ ! -d "$PROJECT_DIR" ]; then
               echo "首次部署，克隆仓库..."
               retry git clone https://github.com/initialize-ye/Subscriber.git "$PROJECT_DIR"
@@ -72,7 +72,7 @@ jobs:
             cd "$PROJECT_DIR"
 
             # 2. 备份当前版本与运行时数据
-            echo -e "\n${GREEN}[2/9] 备份当前版本与运行时数据${NC}"
+            echo -e "\n${GREEN}[2/10] 备份当前版本与运行时数据${NC}"
             mkdir -p "$BACKUP_DIR" "$RUNTIME_BACKUP_DIR"
             rm -f "$RUNTIME_BACKUP_DIR"/*
             CURRENT_COMMIT=$(git rev-parse HEAD)
@@ -90,7 +90,7 @@ jobs:
             fi
 
             # 3. 拉取最新代码
-            echo -e "\n${GREEN}[3/9] 拉取最新代码${NC}"
+            echo -e "\n${GREEN}[3/10] 拉取最新代码${NC}"
             retry git fetch origin main
             git reset --hard origin/main
             restore_runtime
@@ -104,11 +104,11 @@ jobs:
             fi
 
             # 4. 显示变更
-            echo -e "\n${GREEN}[4/9] 代码变更${NC}"
+            echo -e "\n${GREEN}[4/10] 代码变更${NC}"
             git log --oneline --no-decorate "$CURRENT_COMMIT..$NEW_COMMIT" | head -5
 
             # 5. 创建虚拟环境（仅首次）& 安装依赖
-            echo -e "\n${GREEN}[5/9] 更新依赖${NC}"
+            echo -e "\n${GREEN}[5/10] 更新依赖${NC}"
             if [ ! -d ".venv" ]; then
               echo "创建虚拟环境..."
               python3 -m venv .venv
@@ -116,8 +116,12 @@ jobs:
             "$PROJECT_DIR/.venv/bin/pip" install -r requirements.txt -q --no-cache-dir
             echo "✓ 依赖已更新"
 
-            # 6. 检查 Playwright Chromium（本地已有则跳过下载）
-            echo -e "\n${GREEN}[6/9] 检查 Playwright${NC}"
+            # 6. 应用 bison 补丁
+            echo -e "\n${GREEN}[6/10] 应用 bison 补丁${NC}"
+            "$PROJECT_DIR/.venv/bin/python" "$PROJECT_DIR/patch_bison.py"
+
+            # 7. 检查 Playwright Chromium（本地已有则跳过下载）
+            echo -e "\n${GREEN}[7/10] 检查 Playwright${NC}"
             CHROME_PATH="$HOME/.local/share/nonebot2/nonebot_plugin_htmlrender/chromium_headless_shell-1217"
             if [ -f "$CHROME_PATH/chrome-headless-shell-linux64/chrome-headless-shell" ] || [ -d "$HOME/.cache/ms-playwright/chromium-1217" ]; then
               echo "✓ Playwright 浏览器已安装"
@@ -126,8 +130,8 @@ jobs:
               "$PROJECT_DIR/.venv/bin/playwright" install chromium 2>/dev/null || echo -e "${YELLOW}⚠ 下载失败（htmlrender 会自动处理）${NC}"
             fi
 
-            # 7. 语法检查
-            echo -e "\n${GREEN}[7/9] 语法检查${NC}"
+            # 8. 语法检查
+            echo -e "\n${GREEN}[8/10] 语法检查${NC}"
             if "$PROJECT_DIR/.venv/bin/python" -m py_compile bot.py 2>/dev/null; then
               echo "✓ 语法检查通过"
             else
@@ -136,8 +140,8 @@ jobs:
               exit 1
             fi
 
-            # 8. 检查配置
-            echo -e "\n${GREEN}[8/9] 检查配置${NC}"
+            # 9. 检查配置
+            echo -e "\n${GREEN}[9/10] 检查配置${NC}"
             if [ ! -f .env ]; then
               echo -e "${RED}✗ .env 文件不存在，请先在服务器上创建${NC}"
               exit 1
@@ -145,8 +149,8 @@ jobs:
               echo "✓ .env 存在"
             fi
 
-            # 9. 创建 systemd 服务（仅首次）& 重启
-            echo -e "\n${GREEN}[9/9] 重启服务${NC}"
+            # 10. 创建 systemd 服务（仅首次）& 重启
+            echo -e "\n${GREEN}[10/10] 重启服务${NC}"
             if [ ! -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
               echo "创建 systemd 服务..."
               sudo tee /etc/systemd/system/${SERVICE_NAME}.service > /dev/null << SVCEOF
