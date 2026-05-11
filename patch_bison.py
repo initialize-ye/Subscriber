@@ -46,6 +46,9 @@ def _assert_not_patched(content: str, new: str, name: str) -> None:
     """Verify new pattern IS in patched content."""
     if new not in content:
         print(f"WARN: {name} — new pattern not found, patch may have failed")
+
+
+def _step(n: int, msg: str) -> None:
     print(f"[{n}/{TOTAL_STEPS}] {msg}")
 
 
