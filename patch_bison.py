@@ -264,4 +264,38 @@ if old in content:
 else:
     print("7/7 SKIP: pattern not found (already patched?)")
 
+# ====== 8. Better error messages for add_cookie ======
+add_cookie_path = os.path.join(BASE, "sub_manager/add_cookie.py")
+with open(add_cookie_path, "r") as f:
+    content = f.read()
+
+old_err1 = 'if not await client_mgr.validate_cookie(cookie_text):\n            await add_cookie.reject(\n                "无效的 Cookie，请检查后重新输入，详情见https://nonebot-bison.netlify.app/usage/cookie.html"\n            )'
+new_err1 = 'if not await client_mgr.validate_cookie(cookie_text):\n            await add_cookie.reject(\n                "Cookie 格式无效，确保是从浏览器完整复制的 Cookie 字符串。\\n详情请查看：https://nonebot-bison.netlify.app/usage/cookie.html"\n            )'
+
+if old_err1 in content:
+    content = content.replace(old_err1, new_err1)
+    print("8/8 add_cookie: 格式错误提示已改进")
+else:
+    print("8/8 add_cookie: err1 SKIP (already patched?)")
+
+old_err2 = 'except JSONDecodeError as e:\n            logger.error("获取 Cookie 名称失败:" + str(e))\n            await add_cookie.reject(\n                "获取 Cookie 名称失败，请检查后重新输入，详情见https://nonebot-bison.netlify.app/usage/cookie.html"\n            )'
+new_err2 = 'except (JSONDecodeError, KeyError, httpx.HTTPStatusError) as e:\n            logger.error("获取 Cookie 名称失败:" + str(e))\n            status = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None\n            if status == 432:\n                msg = "微博 API 拒绝了验证请求，可能原因：\\n1. Cookie 已过期，请重新获取\\n2. 服务器 IP 被微博限制"'
+new_err2 += '\n            elif status:\n                msg = f"微博 API 返回错误 (HTTP {status})"'
+new_err2 += '\n            else:\n                msg = f"验证失败：{e}"\n            await add_cookie.reject(msg)'
+
+if old_err2 in content:
+    content = content.replace(old_err2, new_err2)
+    print("8/8 add_cookie: 验证失败提示已改进")
+else:
+    print("8/8 add_cookie: err2 SKIP")
+
+if "import httpx" not in content:
+    content = content.replace(
+        "from nonebot.log import logger",
+        "import httpx\nfrom nonebot.log import logger"
+    )
+
+with open(add_cookie_path, "w") as f:
+    f.write(content)
+
 print("\nAll patches applied!")
