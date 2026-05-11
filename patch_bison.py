@@ -1,25 +1,30 @@
-"""Comprehensive bison patch: disable unwanted platforms + fix weibo parse_target."""
+"""Comprehensive bison patch: disable unwanted platforms + fix weibo + improve errors."""
 
 import os
 import re
-import json
 
 BASE = "/home/ubuntu/Subscriber/.venv/lib/python3.12/site-packages/nonebot_bison"
 
-def parse_cookie_string(cookie_str: str) -> dict:
-    """Parse cookie string like 'key=value; key2=value2' into dict."""
-    result = {}
-    for item in cookie_str.split(";"):
-        item = item.strip()
-        if "=" in item:
-            key, value = item.split("=", 1)
-            result[key.strip()] = value.strip()
-    return result
+TOTAL_STEPS = 8
+
+
+def _read(path: str) -> str:
+    with open(path) as f:
+        return f.read()
+
+
+def _write(path: str, content: str) -> None:
+    with open(path, "w") as f:
+        f.write(content)
+
+
+def _step(n: int, msg: str) -> None:
+    print(f"[{n}/{TOTAL_STEPS}] {msg}")
+
 
 # ====== 1. Patch metrics.py ======
-metrics_path = os.path.join(BASE, "metrics.py")
-with open(metrics_path, "w") as f:
-    f.write("""import time
+metrics_content = """\
+import time
 try:
     from nonebot import require
     require("nonebot_plugin_prometheus")
@@ -44,8 +49,10 @@ request_time_histogram = Histogram("bison_request_histogram", "The time of platf
 render_time_histogram = Histogram("bison_render_histogram", "The time of theme used to render", ["site_name", "platform_name"], buckets=[0.1, 0.5, 1, 2, 5, 10, 30, 60])
 start_time = Gauge("bison_start_time", "The start time of the program")
 start_time.set(time.time())
-""")
-print("1/4 metrics.py patched")
+"""
+_write(os.path.join(BASE, "metrics.py"), metrics_content)
+_step(1, "metrics.py patched")
+
 
 # ====== 2. Disable unwanted platforms ======
 for fp in [
@@ -56,162 +63,74 @@ for fp in [
     "platform/ceobecanteen/platform.py",
 ]:
     path = os.path.join(BASE, fp)
-    with open(path, "r") as f:
-        content = f.read()
-    content = re.sub(r"\b(enabled)\s*=\s*True", r"\1 = False", content)
-    content = re.sub(r"\b(is_common)\s*=\s*True", r"\1 = False", content)
+    content = _read(path)
+    content = re.sub(r"\benabled\s*=\s*True", "enabled = False", content)
+    content = re.sub(r"\bis_common\s*=\s*True", "is_common = False", content)
     content = re.sub(r"enabled:\s*bool\s*=\s*True", "enabled: bool = False", content)
-    with open(path, "w") as f:
-        f.write(content)
-    print(f"2/4 Disabled: {fp}")
+    _write(path, content)
+_step(2, "Disabled: arknights, ff14, ncm, rss, ceobecanteen")
+
 
 # ====== 3. Disable bilibili-live and bilibili-bangumi (keep bilibili main) ======
 bili_path = os.path.join(BASE, "platform/bilibili/platforms.py")
-with open(bili_path, "r") as f:
-    bili_content = f.read()
-
-# Find bilibili-live and bilibili-bangumi classes and disable them
-for platform_name in ["bilibili-live", "bilibili-bangumi"]:
-    # Find the class with this platform_name and disable its enabled/is_common
-    idx = bili_content.find(f'platform_name = "{platform_name}"')
+bili_content = _read(bili_path)
+for name in ["bilibili-live", "bilibili-bangumi"]:
+    idx = bili_content.find(f'platform_name = "{name}"')
     if idx == -1:
         continue
-    # Search forward from this point to find enabled and is_common
-    segment = bili_content[idx:idx+200]
-    old_segment = segment
-    segment = re.sub(r"\b(enabled)\s*=\s*True", r"\1 = False", segment)
-    segment = re.sub(r"\b(is_common)\s*=\s*True", r"\1 = False", segment)
-    bili_content = bili_content.replace(old_segment, segment)
+    segment = bili_content[idx : idx + 200]
+    new_segment = segment.replace("enabled = True", "enabled = False")
+    new_segment = new_segment.replace("is_common = True", "is_common = False")
+    bili_content = bili_content.replace(segment, new_segment)
+_write(bili_path, bili_content)
+_step(3, "bilibili-live and bilibili-bangumi disabled")
 
-with open(bili_path, "w") as f:
-    f.write(bili_content)
-print("3/4 bilibili-live and bilibili-bangumi disabled")
 
-# ====== 4. Fix weibo parse_target ======
+# ====== 4-7. Weibo patches (single read/write) ======
 weibo_path = os.path.join(BASE, "platform/weibo.py")
-with open(weibo_path, "r") as f:
-    content = f.read()
+weibo = _read(weibo_path)
 
-# Represent literal \n in file as \\n in our strings
-new_method = (
+# 4. Fix parse_target — support weibo.com/UID in addition to weibo.com/u/UID
+old_parse = (
     "    @classmethod\n"
     "    async def parse_target(cls, target_text: str) -> Target:\n"
-    "        if re.match(r\"\\d+\", target_text):\n"
+)
+parse_end = weibo.find("\n    async def get_sub_list", weibo.find(old_parse))
+new_parse = (
+    "    @classmethod\n"
+    "    async def parse_target(cls, target_text: str) -> Target:\n"
+    '        if re.match(r"\\d+", target_text):\n'
     "            return Target(target_text)\n"
-    "        elif match := re.match(r\"(?:https?://)?weibo\\.com/u/(\\d+)\", target_text):\n"
+    '        elif match := re.match(r"(?:https?://)?weibo\\.com/u/(\\d+)", target_text):\n'
     "            return Target(match.group(1))\n"
-    "        elif match := re.match(r\"(?:https?://)?weibo\\.com/(\\d+)\", target_text):\n"
+    '        elif match := re.match(r"(?:https?://)?weibo\\.com/(\\d+)", target_text):\n'
     "            return Target(match.group(1))\n"
     "        else:\n"
-    "            raise cls.ParseTargetException(prompt=\"正确格式:\\n1. 用户数字UID (如 7618923072)\\n2. https://weibo.com/7618923072\\n3. https://weibo.com/u/7618923072\")\n"
+    '            raise cls.ParseTargetException(prompt="正确格式:\\n1. 用户数字UID (如 7618923072)\\n2. https://weibo.com/7618923072\\n3. https://weibo.com/u/7618923072")\n'
 )
-
-# Find the old parse_target method and replace it
-method_start = content.find("    @classmethod\n    async def parse_target")
-if method_start >= 0:
-    method_end = content.find("\n    async def get_sub_list", method_start)
-    if method_end >= 0:
-        content = content[:method_start] + new_method + content[method_end:]
-        with open(weibo_path, "w") as f:
-            f.write(content)
-        print("4/4 weibo.py patched")
-    else:
-        print("4/4 FAIL: could not find end of parse_target")
+if old_parse in weibo and parse_end > 0:
+    weibo = weibo[: weibo.index(old_parse)] + new_parse + weibo[parse_end:]
+    _step(4, "weibo parse_target fixed")
 else:
-    print("4/4 FAIL: could not find parse_target")
+    _step(4, "weibo parse_target SKIP (pattern not found)")
 
-# ====== 5. Fix weibo cookie get_cookie_name (support HTTP cookie format, not just JSON) ======
-weibo_path = os.path.join(BASE, "platform/weibo.py")
-with open(weibo_path, "r") as f:
-    content = f.read()
-
-# Replace the problematic json.loads with parse_cookie_string
-old_cookie_method = """    @override
-    async def get_cookie_name(self, content: str) -> str:
-        \"\"\"从cookie内容中获取cookie的友好名字，添加cookie时调用，持久化在数据库中\"\"\"
-        name = await self._get_current_user_name(json.loads(content))
-
-        return text_fletten(f"weibo: [{name[:10]}]")"""
-
-new_cookie_method = """    @override
-    async def get_cookie_name(self, content: str) -> str:
-        \"\"\"从cookie内容中获取cookie的友好名字，添加cookie时调用，持久化在数据库中\"\"\"
-        cookies = json.loads(content) if content.strip().startswith(\"{\") else parse_cookie_string(content)
-        name = await self._get_current_user_name(cookies)
-
-        return text_fletten(f"weibo: [{name[:10]}]")"""
-
-if old_cookie_method in content:
-    content = content.replace(old_cookie_method, new_cookie_method)
-else:
-    print("5/5 WARN: old cookie method pattern not found in weibo.py")
-
-with open(weibo_path, "w") as f:
-    f.write(content)
-
-# Also add parse_cookie_string import to weibo.py
-if "parse_cookie_string" not in content:
-    # Add it right after json import if exists, otherwise at top of non-class section
-    content_lines = content.split("\n")
-    # Find the imports section
-    for i, line in enumerate(content_lines):
-        if "from nonebot_bison.utils.site import" in line:
-            content_lines.insert(i, "from nonebot_bison.config import parse_cookie_string")
-            break
-    content = "\n".join(content_lines)
-
-    # Actually, parse_cookie_string is local to patch script, not in bison.
-    # We need to add it to weibo.py itself or use another approach.
-    # Let's undo the import and just embed the function.
-    content_lines = content.split("\n")
-    for i, line in enumerate(content_lines):
-        if "from nonebot_bison.config import parse_cookie_string" in line:
-            content_lines.pop(i)
-            break
-    content = "\n".join(content_lines)
-
-# Actually, let's embed the helper directly in weibo.py
-weibo_func = """
-def _parse_cookie_str(cookie_str: str) -> dict:
-    \"\"\"Parse cookie string like 'key=value; key2=value2' into dict.\"\"\"
-    result = {}
-    items = cookie_str.split(\";\")
-    for item in items:
-        item = item.strip()
-        if \"=\" in item:
-            key, value = item.split(\"=\", 1)
-            result[key.strip()] = value.strip()
-    return result
-"""
-
-weibo_path = os.path.join(BASE, "platform/weibo.py")
-with open(weibo_path, "r") as f:
-    content = f.read()
-
-# Add helper function and fix get_cookie_name
-# First add the helper function after imports
-content = content.replace(
-    "from nonebot_bison.utils.site import",
-    "_parse_cookie_str = lambda s: dict((k.strip(), v.strip()) for k, v in (item.strip().split('=', 1) for item in s.split(';') if '=' in item))\nfrom nonebot_bison.utils.site import"
-)
-
-# Now fix get_cookie_name
-content = content.replace(
+# 5. Fix get_cookie_name — support HTTP cookie format (not just JSON)
+weibo = weibo.replace(
     "name = await self._get_current_user_name(json.loads(content))",
-    "name = await self._get_current_user_name(json.loads(content) if content.strip().startswith('{') else _parse_cookie_str(content))"
+    'name = await self._get_current_user_name(json.loads(content) if content.strip().startswith("{") else '
+    "dict((k.strip(), v.strip()) for k, v in (item.strip().split('=', 1) for item in content.split(';') if '=' in item)))",
 )
+_step(5, "weibo cookie format fix applied")
 
-with open(weibo_path, "w") as f:
-    f.write(content)
+# 6. Add proxy to _get_current_user_name
+weibo = weibo.replace(
+    'async with http_client() as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)',
+    'async with http_client(proxy="http://127.0.0.1:7890") as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)',
+)
+_step(6, "weibo _get_current_user_name proxy applied")
 
-print("5/5 weibo cookie format fix applied")
-
-# ====== 6. Configure weibo to use proxy ======
-with open(weibo_path, "r") as f:
-    content = f.read()
-
-# Add proxy to weibo's get_client
-old_get_client = """    @override
+# 7. Add get_query_name_client with proxy (after get_client)
+old_client = """    @override
     async def get_client(self, target: Target | None) -> AsyncClient:
         client = await super().get_client(target)
 
@@ -220,7 +139,7 @@ old_get_client = """    @override
 
         return client"""
 
-new_get_client = """    @override
+new_client = """    @override
     async def get_client(self, target: Target | None) -> AsyncClient:
         client = await super().get_client(target)
 
@@ -239,63 +158,72 @@ new_get_client = """    @override
 
     @classmethod"""
 
-if old_get_client in content:
-    content = content.replace(old_get_client, new_get_client)
-    print("6/6 weibo proxy configured")
+if old_client in weibo:
+    weibo = weibo.replace(old_client, new_client)
+    _step(7, "weibo proxy configured")
 else:
-    print("6/6 FAIL: get_client pattern not found")
+    _step(7, "weibo proxy SKIP (pattern not found)")
 
-with open(weibo_path, "w") as f:
-    f.write(content)
+_write(weibo_path, weibo)
 
-# ====== 7. weibo _get_current_user_name uses proxy ======
-weibo_path = os.path.join(BASE, "platform/weibo.py")
-with open(weibo_path, "r") as f:
-    content = f.read()
 
-old = 'async with http_client() as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)'
-new = 'async with http_client(proxy="http://127.0.0.1:7890") as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)'
-
-if old in content:
-    content = content.replace(old, new)
-    with open(weibo_path, "w") as f:
-        f.write(content)
-    print("7/7 weibo _get_current_user_name proxy applied")
-else:
-    print("7/7 SKIP: pattern not found (already patched?)")
-
-# ====== 8. Better error messages for add_cookie ======
+# ====== 8. Better feedback for add_cookie ======
 add_cookie_path = os.path.join(BASE, "sub_manager/add_cookie.py")
-with open(add_cookie_path, "r") as f:
-    content = f.read()
+add_cookie = _read(add_cookie_path)
 
-old_err1 = 'if not await client_mgr.validate_cookie(cookie_text):\n            await add_cookie.reject(\n                "无效的 Cookie，请检查后重新输入，详情见https://nonebot-bison.netlify.app/usage/cookie.html"\n            )'
-new_err1 = 'if not await client_mgr.validate_cookie(cookie_text):\n            await add_cookie.reject(\n                "Cookie 格式无效，确保是从浏览器完整复制的 Cookie 字符串。\\n详情请查看：https://nonebot-bison.netlify.app/usage/cookie.html"\n            )'
+# 8a. Improve validation failure message
+add_cookie = add_cookie.replace(
+    'if not await client_mgr.validate_cookie(cookie_text):\n            await add_cookie.reject(\n                "无效的 Cookie，请检查后重新输入，详情见https://nonebot-bison.netlify.app/usage/cookie.html"\n            )',
+    'if not await client_mgr.validate_cookie(cookie_text):\n            await add_cookie.reject(\n                "Cookie 格式无效，确保是从浏览器完整复制的 Cookie 字符串。\\n详情请查看：https://nonebot-bison.netlify.app/usage/cookie.html"\n            )',
+)
 
-if old_err1 in content:
-    content = content.replace(old_err1, new_err1)
-    print("8/8 add_cookie: 格式错误提示已改进")
-else:
-    print("8/8 add_cookie: err1 SKIP (already patched?)")
+# 8b. Add loading indicator + catch all errors (including network) during cookie validation
+old_err = '            cookie_name = await client_mgr.get_cookie_name(cookie_text)\n            state["cookie"] = cookie_text\n            state["cookie_name"] = cookie_name\n        except JSONDecodeError as e:\n            logger.error("获取 Cookie 名称失败:" + str(e))\n            await add_cookie.reject(\n                "获取 Cookie 名称失败，请检查后重新输入，详情见https://nonebot-bison.netlify.app/usage/cookie.html"\n            )'
+new_err = (
+    '            await add_cookie.send("正在验证 Cookie...")\n'
+    "            cookie_name = await client_mgr.get_cookie_name(cookie_text)\n"
+    '            state["cookie"] = cookie_text\n'
+    '            state["cookie_name"] = cookie_name\n'
+    "        except (JSONDecodeError, KeyError) as e:\n"
+    '            logger.error("获取 Cookie 名称失败: " + str(e))\n'
+    '            await add_cookie.reject(f"Cookie 解析失败：{e}")\n'
+    "        except httpx.HTTPStatusError as e:\n"
+    '            logger.error(f"获取 Cookie 名称失败: HTTP {e.response.status_code}")\n'
+    "            status = e.response.status_code\n"
+    "            if status == 432:\n"
+    '                msg = "微博 API 拒绝了验证请求，可能原因：\\n1. Cookie 已过期，请重新获取\\n2. 服务器 IP 被微博限制"\n'
+    "            else:\n"
+    '                msg = f"微博 API 返回错误 (HTTP {status})"\n'
+    "            await add_cookie.reject(msg)\n"
+    "        except (httpx.ConnectError, httpx.TimeoutException) as e:\n"
+    '            logger.error(f"网络请求失败: {e}")\n'
+    '            await add_cookie.reject(f"网络请求失败，请检查网络连接后重试：{type(e).__name__}")'
+)
+add_cookie = add_cookie.replace(old_err, new_err)
 
-old_err2 = 'except JSONDecodeError as e:\n            logger.error("获取 Cookie 名称失败:" + str(e))\n            await add_cookie.reject(\n                "获取 Cookie 名称失败，请检查后重新输入，详情见https://nonebot-bison.netlify.app/usage/cookie.html"\n            )'
-new_err2 = 'except (JSONDecodeError, KeyError, httpx.HTTPStatusError) as e:\n            logger.error("获取 Cookie 名称失败:" + str(e))\n            status = e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None\n            if status == 432:\n                msg = "微博 API 拒绝了验证请求，可能原因：\\n1. Cookie 已过期，请重新获取\\n2. 服务器 IP 被微博限制"'
-new_err2 += '\n            elif status:\n                msg = f"微博 API 返回错误 (HTTP {status})"'
-new_err2 += '\n            else:\n                msg = f"验证失败：{e}"\n            await add_cookie.reject(msg)'
+# 8c. Add error handling for cookie save (add_identified_cookie)
+old_save = '        new_cookie = await client_mgr.add_identified_cookie(state["cookie"], state["cookie_name"])\n        await add_cookie.finish(\n            f"已添加 Cookie: {new_cookie.cookie_name} 到平台 {state[\'platform\']}"\n            + "\\n请使用“关联cookie”为 Cookie 关联订阅"\n        )'
+new_save = (
+    "        try:\n"
+    '            new_cookie = await client_mgr.add_identified_cookie(state["cookie"], state["cookie_name"])\n'
+    "        except Exception as e:\n"
+    '            logger.error(f"保存 Cookie 失败: {e}")\n'
+    '            await add_cookie.finish(f"Cookie 验证通过，但保存失败：{e}")\n'
+    "            return\n"
+    "        await add_cookie.finish(\n"
+    '            f"已添加 Cookie: {new_cookie.cookie_name} 到平台 {state[\'platform\']}"\n'
+    '            + "\\n请使用“关联cookie”为 Cookie 关联订阅"\n'
+    "        )"
+)
+add_cookie = add_cookie.replace(old_save, new_save)
 
-if old_err2 in content:
-    content = content.replace(old_err2, new_err2)
-    print("8/8 add_cookie: 验证失败提示已改进")
-else:
-    print("8/8 add_cookie: err2 SKIP")
-
-if "import httpx" not in content:
-    content = content.replace(
+if "import httpx" not in add_cookie:
+    add_cookie = add_cookie.replace(
         "from nonebot.log import logger",
-        "import httpx\nfrom nonebot.log import logger"
+        "import httpx\nfrom nonebot.log import logger",
     )
 
-with open(add_cookie_path, "w") as f:
-    f.write(content)
+_write(add_cookie_path, add_cookie)
+_step(8, "add_cookie feedback improved")
 
 print("\nAll patches applied!")

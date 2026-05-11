@@ -12,7 +12,7 @@ view_cookie_matcher = on_command("查看cookie", aliases={"我的cookie", "cooki
 async def handle_view_cookie(event: MessageEvent):
     try:
         cookies = await config.get_cookie(is_anonymous=False)
-    except Exception as e:
+    except (OSError, RuntimeError) as e:
         logger.error(f"获取 Cookie 列表失败: {e}")
         await view_cookie_matcher.finish(Message("获取 Cookie 列表失败"))
 
