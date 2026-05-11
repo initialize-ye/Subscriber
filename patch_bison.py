@@ -23,7 +23,7 @@ else:
             print("ERROR: cannot find nonebot_bison package")
             sys.exit(1)
 
-TOTAL_STEPS = 12
+TOTAL_STEPS = 15
 
 
 def _read(path: str) -> str:
@@ -328,5 +328,47 @@ if 'expire_time=datetime.now()' in _init_content:
     _step(11, "group_manage expire_time fixed")
 else:
     _step(11, "SKIP: expire_time pattern not found")
+
+# ====== 13. Cookie privacy warning ======
+add_cookie_path2 = os.path.join(BASE, "sub_manager/add_cookie.py")
+add_cookie2 = _read(add_cookie_path2)
+add_cookie2 = add_cookie2.replace(
+    'state["_prompt"] = "请输入 Cookie"',
+    'state["_prompt"] = "请输入 Cookie\\n⚠ Cookie 将以明文显示在聊天中，建议确认后删除相关消息"',
+)
+_write(add_cookie_path2, add_cookie2)
+_assert_not_patched(add_cookie2, "Cookie 将以明文显示", "step 13")
+_step(13, "add_cookie privacy warning added")
+
+# ====== 14. Subscription count in query_sub and del_sub ======
+query_sub_path = os.path.join(BASE, "sub_manager/query_sub.py")
+query_sub = _read(query_sub_path)
+query_sub = query_sub.replace(
+    "        await MessageFactory(await parse_text(res)).send()\n        await query_sub.finish()",
+    '        res += f"\\n共 {len(sub_list)} 个订阅"\n        await MessageFactory(await parse_text(res)).send()\n        await query_sub.finish()',
+)
+_write(query_sub_path, query_sub)
+_assert_not_patched(query_sub, 'res += f"\\n共 {len(sub_list)} 个订阅"', "step 14 query_sub")
+
+del_sub_path = os.path.join(BASE, "sub_manager/del_sub.py")
+del_sub = _read(del_sub_path)
+del_sub = del_sub.replace(
+    '        res += "请输入要删除的订阅的序号\\n输入\'取消\'中止"',
+    '        res += f"\\n共 {len(sub_list)} 个订阅\\n"\n        res += "请输入要删除的订阅的序号\\n输入\'取消\'中止"',
+)
+_write(del_sub_path, del_sub)
+_assert_not_patched(del_sub, 'res += f"\\n共 {len(sub_list)} 个订阅\\n"', "step 14 del_sub")
+_step(14, "subscription count added to query_sub and del_sub")
+
+# ====== 15. Better "id输入错误" message in add_sub ======
+add_sub_path = os.path.join(BASE, "sub_manager/add_sub.py")
+add_sub = _read(add_sub_path)
+add_sub = add_sub.replace(
+    'await add_sub.reject("id输入错误")',
+    'await add_sub.reject("无法通过该ID获取用户名，请确认ID是否正确（仅支持数字UID或完整链接）")',
+)
+_write(add_sub_path, add_sub)
+_assert_not_patched(add_sub, "无法通过该ID获取用户名", "step 15")
+_step(15, "add_sub id输入错误 message improved")
 
 print("\nAll patches applied!")
