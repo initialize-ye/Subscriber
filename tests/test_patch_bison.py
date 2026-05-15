@@ -209,22 +209,21 @@ class TestCriticalBugFixes:
         assert "except (ValueError, KeyError, IndexError):" in content
         assert 'except Exception:' not in content
 
-    def test_bilibili_live_disabled(self, bison_base, read_file):
+    def test_bilibili_live_enabled(self, bison_base, read_file):
         content = read_file(os.path.join(bison_base, "platform/bilibili/platforms.py"))
-        # Find bilibili-live section and check enabled = False
         idx = content.find('platform_name = "bilibili-live"')
         if idx == -1:
             pytest.skip("bilibili-live not found")
         segment = content[idx:idx + 200]
-        assert "enabled = False" in segment
+        assert "enabled = True" in segment
 
-    def test_bilibili_bangumi_disabled(self, bison_base, read_file):
+    def test_bilibili_bangumi_enabled(self, bison_base, read_file):
         content = read_file(os.path.join(bison_base, "platform/bilibili/platforms.py"))
         idx = content.find('platform_name = "bilibili-bangumi"')
         if idx == -1:
             pytest.skip("bilibili-bangumi not found")
         segment = content[idx:idx + 200]
-        assert "enabled = False" in segment
+        assert "enabled = True" in segment
 
     def test_weibo_proxy_configured(self, bison_base, read_file):
         content = read_file(os.path.join(bison_base, "platform/weibo.py"))

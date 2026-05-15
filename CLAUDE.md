@@ -25,6 +25,8 @@ python -m py_compile bot.py
 python -m py_compile my_plugins/help.py
 python -m py_compile my_plugins/cookie_mgr.py
 python -m py_compile patch_bison.py
+python -m py_compile my_plugins/sub_status.py
+python -m py_compile my_plugins/sub_edit.py
 
 # Run tests
 python -m pytest tests/ -q
@@ -45,9 +47,9 @@ Tests use pytest (`python -m pytest tests/ -q`). CI runs `py_compile` as a smoke
 
 **Communication model:** Bot runs as a WebSocket *server* on `0.0.0.0:28080`. NapCatQQ (the QQ protocol client) connects *to it* via reverse WebSocket. All QQ commands require @mentioning the bot (`rule=to_me()`).
 
-**Enabled platforms:** Only Bilibili (动态) and Weibo (微博) are kept. All other nonebot-bison platforms (arknights, ff14, ncm, rss, ceobecanteen, bilibili-live, bilibili-bangumi) are disabled by `patch_bison.py`.
+**Enabled platforms:** Bilibili (动态), Bilibili直播 (bilibili-live), Bilibili剧集 (bilibili-bangumi), and Weibo (微博) are kept. All other nonebot-bison platforms (arknights, ff14, ncm, rss, ceobecanteen) are disabled by `patch_bison.py`.
 
-**Custom plugins** (`my_plugins/`): Lightweight NoneBot2 command handlers that route user commands into nonebot-bison's built-in subscription management. `help.py` provides the command list; `cookie_mgr.py` lists stored cookies with their validation status and subscription associations.
+**Custom plugins** (`my_plugins/`): Lightweight NoneBot2 command handlers that route user commands into nonebot-bison's built-in subscription management. `help.py` provides the command list; `cookie_mgr.py` lists stored cookies with their validation status and subscription associations; `sub_status.py` shows subscription details (platform, categories, tags, weight); `sub_edit.py` enables interactive category/tag editing for existing subscriptions.
 
 **Monkey-patching pattern:** `patch_bison.py` (38 steps) directly modifies installed nonebot-bison source files inside `.venv/` — it replaces metrics imports with safe fallbacks, disables 7+ unused platforms, fixes weibo target parsing and cookie handling, injects proxy configuration for weibo API calls, and improves Chinese-language error messages throughout the bison subscription UI. It is not imported at runtime — run manually after dependency installation and must be re-applied after any `pip install` or upgrade of nonebot-bison.
 

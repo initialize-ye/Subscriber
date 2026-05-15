@@ -16,6 +16,8 @@ class TestMyPluginsSyntax:
         "my_plugins/__init__.py",
         "my_plugins/help.py",
         "my_plugins/cookie_mgr.py",
+        "my_plugins/sub_status.py",
+        "my_plugins/sub_edit.py",
     ]
 
     @pytest.mark.parametrize("rel_path", PLUGIN_FILES)
@@ -45,7 +47,7 @@ class TestHelpText:
 
     def test_help_contains_all_commands(self):
         content = (PROJECT_ROOT / "my_plugins" / "help.py").read_text(encoding="utf-8")
-        required = ["添加订阅", "查询订阅", "删除订阅", "添加cookie", "查看cookie", "关联cookie", "删除cookie", "群管理", "help"]
+        required = ["添加订阅", "查询订阅", "删除订阅", "订阅状态", "编辑订阅", "添加cookie", "查看cookie", "关联cookie", "删除cookie", "群管理", "help"]
         for cmd in required:
             assert cmd in content, f"Help text missing command: {cmd}"
 

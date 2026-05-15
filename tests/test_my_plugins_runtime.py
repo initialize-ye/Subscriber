@@ -81,6 +81,18 @@ class TestHelpTextContent:
         assert "帮助" in content
         assert '"?"' in content or "'?'" in content
 
+    def test_subscription_status_command(self, content):
+        assert "订阅状态" in content
+
+    def test_edit_subscription_command(self, content):
+        assert "编辑订阅" in content
+
+    def test_lists_bilibili_live_platform(self, content):
+        assert "B站直播" in content
+
+    def test_lists_bilibili_bangumi_platform(self, content):
+        assert "B站番剧" in content
+
 
 class TestCookieMgrContent:
     """Verify cookie_mgr.py content and error handling."""
@@ -147,3 +159,90 @@ class TestInitFile:
         content = (PROJECT_ROOT / "my_plugins" / "__init__.py").read_text(encoding="utf-8")
         # Should be empty or contain only valid Python
         assert len(content.strip()) == 0 or "import" in content
+
+
+class TestSubStatusContent:
+    """Verify sub_status.py content and structure."""
+
+    @pytest.fixture
+    def content(self):
+        return (PROJECT_ROOT / "my_plugins" / "sub_status.py").read_text(encoding="utf-8")
+
+    def test_imports_config(self, content):
+        assert "from nonebot_bison.config import config" in content
+
+    def test_imports_platform_manager(self, content):
+        assert "from nonebot_bison.platform import platform_manager" in content
+
+    def test_imports_extract_target(self, content):
+        assert "extract_target" in content
+
+    def test_command_name(self, content):
+        assert "订阅状态" in content
+
+    def test_shows_platform_name(self, content):
+        assert "platform" in content
+        assert "plat_name" in content
+
+    def test_shows_categories(self, content):
+        assert "Category" in content
+        assert "cats" in content
+
+    def test_shows_tags(self, content):
+        assert "tags" in content
+
+    def test_shows_cookie_status(self, content):
+        assert "cookie" in content.lower()
+        assert "cookie_set" in content
+
+    def test_shows_total_count(self, content):
+        assert "共" in content
+        assert "len(sub_list)" in content
+
+    def test_handles_empty_subs(self, content):
+        assert "暂无已订阅账号" in content
+
+    def test_handles_error(self, content):
+        assert "except Exception" in content
+
+
+class TestSubEditContent:
+    """Verify sub_edit.py content and structure."""
+
+    @pytest.fixture
+    def content(self):
+        return (PROJECT_ROOT / "my_plugins" / "sub_edit.py").read_text(encoding="utf-8")
+
+    def test_imports_config(self, content):
+        assert "from nonebot_bison.config import config" in content
+
+    def test_imports_update_subscribe(self, content):
+        assert "update_subscribe" in content
+
+    def test_imports_platform_manager(self, content):
+        assert "from nonebot_bison.platform import platform_manager" in content
+
+    def test_command_name(self, content):
+        assert "编辑订阅" in content
+
+    def test_has_cancel_handling(self, content):
+        assert "取消" in content
+
+    def test_has_multi_step_flow(self, content):
+        """Should use got() for multi-step interaction."""
+        assert ".got(" in content
+
+    def test_handles_invalid_index(self, content):
+        assert "序号" in content
+
+    def test_handles_error(self, content):
+        assert "except Exception" in content
+
+    def test_shows_success_message(self, content):
+        assert "已更新订阅" in content
+
+    def test_has_category_parsing(self, content):
+        assert "_parse_categories" in content
+
+    def test_supports_unchanged_input(self, content):
+        assert "不变" in content

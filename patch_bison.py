@@ -132,8 +132,10 @@ _step(2, "Disabled: arknights, ff14, ncm, rss, ceobecanteen")
 bili_path = os.path.join(BASE, "platform/bilibili/platforms.py")
 bili = _read(bili_path)
 
-# Step 3: Disable bilibili-live and bilibili-bangumi
-for name in ["bilibili-live", "bilibili-bangumi"]:
+# Step 3: Disable unused bilibili sub-platforms, keep live/bangumi enabled
+_disable = []
+_enable = ["bilibili-live", "bilibili-bangumi"]
+for name in _disable:
     idx = bili.find(f'platform_name = "{name}"')
     if idx == -1:
         continue
@@ -144,7 +146,19 @@ for name in ["bilibili-live", "bilibili-bangumi"]:
     new_segment = segment.replace("enabled = True", "enabled = False")
     new_segment = new_segment.replace("is_common = True", "is_common = False")
     bili = bili.replace(segment, new_segment)
-_step(3, "bilibili-live and bilibili-bangumi disabled")
+# Re-enable platforms that should stay active
+for name in _enable:
+    idx = bili.find(f'platform_name = "{name}"')
+    if idx == -1:
+        continue
+    next_class = bili.find("\nclass ", idx + 1)
+    if next_class == -1:
+        next_class = len(bili)
+    segment = bili[idx:next_class]
+    new_segment = segment.replace("enabled = False", "enabled = True")
+    new_segment = new_segment.replace("is_common = False", "is_common = True")
+    bili = bili.replace(segment, new_segment)
+_step(3, "unused bilibili sub-platforms disabled (live/bangumi kept)")
 
 # Step 26: Fix bilibili parse_target regex (anchor end)
 bili = bili.replace(
