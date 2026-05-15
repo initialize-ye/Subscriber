@@ -49,7 +49,7 @@ Tests use pytest (`python -m pytest tests/ -q`). CI runs `py_compile` as a smoke
 
 **Custom plugins** (`my_plugins/`): Lightweight NoneBot2 command handlers that route user commands into nonebot-bison's built-in subscription management. `help.py` provides the command list; `cookie_mgr.py` lists stored cookies with their validation status and subscription associations.
 
-**Monkey-patching pattern:** `patch_bison.py` (36 steps) directly modifies installed nonebot-bison source files inside `.venv/` — it replaces metrics imports with safe fallbacks, disables 7+ unused platforms, fixes weibo target parsing and cookie handling, injects proxy configuration for weibo API calls, and improves Chinese-language error messages throughout the bison subscription UI. It is not imported at runtime — run manually after dependency installation and must be re-applied after any `pip install` or upgrade of nonebot-bison.
+**Monkey-patching pattern:** `patch_bison.py` (38 steps) directly modifies installed nonebot-bison source files inside `.venv/` — it replaces metrics imports with safe fallbacks, disables 7+ unused platforms, fixes weibo target parsing and cookie handling, injects proxy configuration for weibo API calls, and improves Chinese-language error messages throughout the bison subscription UI. It is not imported at runtime — run manually after dependency installation and must be re-applied after any `pip install` or upgrade of nonebot-bison.
 
 ## Key Configuration
 

@@ -23,7 +23,7 @@ else:
             print("ERROR: cannot find nonebot_bison package")
             sys.exit(1)
 
-TOTAL_STEPS = 36
+TOTAL_STEPS = 38
 
 
 def _read(path: str) -> str:
@@ -719,6 +719,30 @@ if "datetime.datetime.utcnow()" in jwt:
 _step(36, "jwt.py utcnow() deprecation fixed")
 
 _write(jwt_path, jwt)
+
+
+# ====== 37. Fix add_cookie HTTP 432 Weibo-specific error message ======
+add_cookie_path2 = os.path.join(BASE, "sub_manager/add_cookie.py")
+add_cookie2 = _read(add_cookie_path2)
+if '微博 API 拒绝了验证请求' in add_cookie2:
+    add_cookie2 = add_cookie2.replace(
+        '                msg = "微博 API 拒绝了验证请求，可能原因：\\n1. Cookie 已过期，请重新获取\\n2. 服务器 IP 被微博限制"',
+        '                msg = "API 拒绝了验证请求 (HTTP 432)，可能原因：\\n1. Cookie 已过期，请重新获取\\n2. 服务器 IP 被限制"',
+    )
+    _write(add_cookie_path2, add_cookie2)
+_step(37, "add_cookie HTTP 432 message made generic")
+
+
+# ====== 38. Fix db_config assert targetObj (stripped by -O flag) ======
+db_path2 = os.path.join(BASE, "config/db_config.py")
+db2 = _read(db_path2)
+if "assert targetObj" in db2:
+    db2 = db2.replace(
+        "            assert targetObj\n            return WeightConfig(",
+        "            if not targetObj:\n                raise ValueError(f\"目标不存在: {platform_name}/{target}\")\n            return WeightConfig(",
+    )
+    _write(db_path2, db2)
+_step(38, "assert targetObj replaced with proper null check")
 
 
 print("\nAll patches applied!")

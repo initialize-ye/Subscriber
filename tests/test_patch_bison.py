@@ -235,3 +235,22 @@ class TestCriticalBugFixes:
         assert "expire_time=datetime.now() + timedelta(minutes=5)" in content
         # Should NOT have multiple timedelta additions
         assert "timedelta(minutes=5) + timedelta" not in content
+
+    def test_weight_config_no_assert(self, bison_base, read_file):
+        content = read_file(os.path.join(bison_base, "config/db_config.py"))
+        # assert is stripped by -O flag, should use proper null check
+        lines = content.split("\n")
+        for i, line in enumerate(lines):
+            if "assert targetObj" in line:
+                pytest.fail(f"assert targetObj found at line {i+1}, should be a proper null check")
+
+    def test_weight_config_has_null_check(self, bison_base, read_file):
+        content = read_file(os.path.join(bison_base, "config/db_config.py"))
+        assert "if not targetObj:" in content
+
+    def test_http_432_message_generic(self, bison_base, read_file):
+        content = read_file(os.path.join(bison_base, "sub_manager/add_cookie.py"))
+        # Should NOT have Weibo-specific message in generic handler
+        assert "微博 API 拒绝了" not in content
+        # Should have generic message
+        assert "HTTP 432" in content

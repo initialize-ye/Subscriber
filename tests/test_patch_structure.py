@@ -19,12 +19,12 @@ class TestPatchStructure:
     def source(self):
         return PATCH_SCRIPT.read_text(encoding="utf-8")
 
-    def test_total_steps_is_36(self, source):
-        assert "TOTAL_STEPS = 36" in source
+    def test_total_steps_is_38(self, source):
+        assert "TOTAL_STEPS = 38" in source
 
     def test_all_step_numbers_logged(self, source):
-        """Every step number 1-36 should appear in _step() calls."""
-        for i in range(1, 37):
+        """Every step number 1-38 should appear in _step() calls."""
+        for i in range(1, 39):
             pattern = rf'_step\({i},'
             assert re.search(pattern, source), f"Step {i} has no _step() call"
 
