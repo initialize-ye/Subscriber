@@ -23,7 +23,7 @@ else:
             print("ERROR: cannot find nonebot_bison package")
             sys.exit(1)
 
-TOTAL_STEPS = 31
+TOTAL_STEPS = 35
 
 
 def _read(path: str) -> str:
@@ -544,11 +544,11 @@ _step(27, "bilibili parse_target regex anchored")
 
 # ====== 28. Fix bilibili bangumi fallback (list vs dict) ======
 bili3 = _read(bili_path)
-if 'lastest_episode = detail_dict["result"]["episodes"]' in bili3:
-    bili3 = bili3.replace(
-        'lastest_episode = detail_dict["result"]["episodes"]',
-        'lastest_episode = detail_dict["result"]["episodes"][0]',
-    )
+# Use full-line match to prevent repeated [0] appending
+old_bangumi = '            lastest_episode = detail_dict["result"]["episodes"]\n'
+new_bangumi = '            lastest_episode = detail_dict["result"]["episodes"][0]\n'
+if old_bangumi in bili3:
+    bili3 = bili3.replace(old_bangumi, new_bangumi)
     _write(bili_path, bili3)
 _step(28, "bilibili bangumi fallback fixed")
 
@@ -588,5 +588,53 @@ db2 = db2.replace(
 )
 _write(db_path, db2)
 _step(31, "weight config defaultdict bug fixed")
+
+# ====== 32. Fix _choose_cookie ValueError on empty list ======
+site_path = os.path.join(BASE, "utils/site.py")
+site = _read(site_path)
+if "available_cookies = (cookie for cookie in" in site:
+    site = site.replace(
+        "        available_cookies = (cookie for cookie in cookies if cookie.last_usage + cookie.cd < datetime.now())\n        cookie = min(available_cookies, key=lambda x: x.last_usage)\n        return cookie",
+        "        available_cookies = [cookie for cookie in cookies if cookie.last_usage + cookie.cd < datetime.now()]\n"
+        "        if not available_cookies:\n"
+        "            available_cookies = cookies\n"
+        "        if not available_cookies:\n"
+        '            raise ValueError(f"平台 {self._site_name} 没有可用的 Cookie")\n'
+        "        cookie = min(available_cookies, key=lambda x: x.last_usage)\n"
+        "        return cookie",
+    )
+    _write(site_path, site)
+_step(32, "_choose_cookie empty list fix applied")
+
+# ====== 33. Fix _should_print_content KeyError ======
+ctx_path = os.path.join(BASE, "utils/context.py")
+ctx = _read(ctx_path)
+ctx = ctx.replace(
+    'content_type = r.headers["content-type"]',
+    'content_type = r.headers.get("content-type", "")',
+)
+_write(ctx_path, ctx)
+_step(33, "_should_print_content KeyError fix applied")
+
+# ====== 34. Fix get_cookie_target orphan handling ======
+db3 = _read(db_path)
+if "res = [x for x in res if x.target is not None]" not in db3:
+    db3 = db3.replace(
+        '            res = list((await sess.scalars(query)).all())\n            res.sort(',
+        '            res = list((await sess.scalars(query)).all())\n            res = [x for x in res if x.target is not None]\n            res.sort(',
+    )
+    _write(db_path, db3)
+_step(34, "get_cookie_target orphan handling fixed")
+
+# ====== 35. Fix html_to_text mutable default ======
+utils_init_path = os.path.join(BASE, "utils/__init__.py")
+utils_init = _read(utils_init_path)
+if 'query_dict: dict = {}' in utils_init:
+    utils_init = utils_init.replace(
+        'def html_to_text(html: str, query_dict: dict = {}) -> str:',
+        'def html_to_text(html: str, query_dict: dict | None = None) -> str:\n    if query_dict is None:\n        query_dict = {}',
+    )
+    _write(utils_init_path, utils_init)
+_step(35, "html_to_text mutable default fixed")
 
 print("\nAll patches applied!")
