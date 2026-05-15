@@ -23,7 +23,7 @@ else:
             print("ERROR: cannot find nonebot_bison package")
             sys.exit(1)
 
-TOTAL_STEPS = 15
+TOTAL_STEPS = 21
 
 
 def _read(path: str) -> str:
@@ -370,5 +370,93 @@ add_sub = add_sub.replace(
 _write(add_sub_path, add_sub)
 _assert_not_patched(add_sub, "无法通过该ID获取用户名", "step 15")
 _step(15, "add_sub id输入错误 message improved")
+
+
+# ====== 16. Fix missing logger import in del_sub.py ======
+del_sub_path2 = os.path.join(BASE, "sub_manager/del_sub.py")
+del_sub2 = _read(del_sub_path2)
+del_sub2 = del_sub2.replace(
+    "from .utils import ensure_user_info, gen_handle_cancel",
+    "from nonebot.log import logger\nfrom .utils import ensure_user_info, gen_handle_cancel",
+)
+_write(del_sub_path2, del_sub2)
+_assert_not_patched(del_sub2, "from nonebot.log import logger", "step 16")
+_step(16, "del_sub.py logger import added")
+
+# ====== 17. Fix missing logger import in del_cookie.py ======
+del_cookie_path = os.path.join(BASE, "sub_manager/del_cookie.py")
+del_cookie = _read(del_cookie_path)
+del_cookie = del_cookie.replace(
+    "from .utils import gen_handle_cancel, only_allow_private",
+    "from nonebot.log import logger\nfrom .utils import gen_handle_cancel, only_allow_private",
+)
+_write(del_cookie_path, del_cookie)
+_assert_not_patched(del_cookie, "from nonebot.log import logger", "step 17")
+_step(17, "del_cookie.py logger import added")
+
+# ====== 18. Add ValueError/KeyError handling in del_sub.py ======
+del_sub3 = _read(del_sub_path2)
+old_del_sub_err = (
+    "        except Exception as e:\n"
+    '            logger.exception(f"删除失败: {e}")\n'
+    '            await del_sub.reject("删除失败，请查看日志或联系管理员")'
+)
+new_del_sub_err = (
+    '        except ValueError:\n'
+    '            await del_sub.reject("请输入正确的数字序号")\n'
+    '        except KeyError:\n'
+    '            await del_sub.reject("序号错误，请输入列表中的序号")\n'
+    "        except Exception as e:\n"
+    '            logger.exception(f"删除失败: {e}")\n'
+    '            await del_sub.reject("删除失败，请查看日志或联系管理员")'
+)
+del_sub3 = del_sub3.replace(old_del_sub_err, new_del_sub_err)
+_write(del_sub_path2, del_sub3)
+_assert_not_patched(del_sub3, 'await del_sub.reject("请输入正确的数字序号")', "step 18")
+_step(18, "del_sub.py input validation added")
+
+# ====== 19. Add ValueError handling in del_cookie.py ======
+del_cookie2 = _read(del_cookie_path)
+old_del_cookie_err = (
+    "        except KeyError:\n"
+    '            await del_cookie.reject("序号错误")'
+)
+new_del_cookie_err = (
+    '        except ValueError:\n'
+    '            await del_cookie.reject("请输入正确的数字序号")\n'
+    "        except KeyError:\n"
+    '            await del_cookie.reject("序号错误")'
+)
+del_cookie2 = del_cookie2.replace(old_del_cookie_err, new_del_cookie_err)
+_write(del_cookie_path, del_cookie2)
+_assert_not_patched(del_cookie2, 'await del_cookie.reject("请输入正确的数字序号")', "step 19")
+_step(19, "del_cookie.py input validation added")
+
+# ====== 20. Add ValueError handling in group_manage ======
+_init2 = _read(_init_path)
+old_group_idx = "    idx = int(group_idx)\n    if idx not in group_number_idx.keys():"
+new_group_idx = (
+    "    try:\n"
+    "        idx = int(group_idx)\n"
+    "    except ValueError:\n"
+    '        await group_manage_matcher.reject("请输入正确的数字序号")\n'
+    "        return\n"
+    "    if idx not in group_number_idx.keys():"
+)
+_init2 = _init2.replace(old_group_idx, new_group_idx)
+_write(_init_path, _init2)
+_assert_not_patched(_init2, 'await group_manage_matcher.reject("请输入正确的数字序号")', "step 20")
+_step(20, "group_manage input validation added")
+
+# ====== 21. Fix English error message in utils.py ======
+utils_path = os.path.join(BASE, "sub_manager/utils.py")
+utils = _read(utils_path)
+utils = utils.replace(
+    "No target_user_info set, this shouldn't happen, please issue",
+    "未设置目标用户信息，这不应该发生，请反馈此问题",
+)
+_write(utils_path, utils)
+_assert_not_patched(utils, "未设置目标用户信息", "step 21")
+_step(21, "utils.py English error message fixed")
 
 print("\nAll patches applied!")

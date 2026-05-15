@@ -9,39 +9,44 @@ QQ chatbot that monitors social media platforms (Bilibili, Weibo, RSS) for new p
 ## Commands
 
 ```bash
-# Setup
+# Setup (use .venv/Scripts/ on Windows)
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/playwright install --with-deps chromium
 
+# Apply bison patches (must re-run after pip install/upgrade of nonebot-bison)
+python patch_bison.py
+
 # Run locally
 python bot.py
 
-# Apply bison patches (must re-run after pip install/upgrade of nonebot-bison)
-python patch_bison.py
+# Syntax check — CI checks all project .py files
+python -m py_compile bot.py
+python -m py_compile my_plugins/help.py
+python -m py_compile my_plugins/cookie_mgr.py
+python -m py_compile patch_bison.py
 
 # Production service management
 sudo systemctl status subscriber
 sudo systemctl restart subscriber
 sudo journalctl -u subscriber -f
-
-# Syntax check (same as CI uses)
-python -m py_compile bot.py
 ```
 
-No formal test suite or linter is configured.
+No formal test suite or linter is configured. CI uses `py_compile` as the smoke test.
 
 ## Architecture
 
 **Entry point:** `bot.py` — loads `.env`, initializes NoneBot2, registers OneBot v11 adapter, loads plugins in order: apscheduler → bison → `my_plugins/`.
 
-**Data flow:** Social platform → nonebot-bison (APScheduler polls) → NoneBot2 message dispatch → NapCatQQ (reverse WebSocket, OneBot v11 protocol) → QQ chat.
+**Data flow:** Social platform → nonebot-bison (APScheduler polls) → NoneBot2 message dispatch → NapCatQQ (reverse WebSocket, OneBot v11 protocol, URL: `ws://<host>:28080/onebot/v11/ws`) → QQ chat.
 
 **Communication model:** Bot runs as a WebSocket *server* on `0.0.0.0:28080`. NapCatQQ (the QQ protocol client) connects *to it* via reverse WebSocket. All QQ commands require @mentioning the bot (`rule=to_me()`).
 
-**Custom plugins** (`my_plugins/`): NoneBot2 command handlers. `help.py` provides help text; `cookie_mgr.py` lists stored cookies. New commands follow the pattern: `on_command("命令名", rule=to_me(), priority=8, block=True)`.
+**Enabled platforms:** Only Bilibili (动态) and Weibo (微博) are kept. All other nonebot-bison platforms (arknights, ff14, ncm, rss, ceobecanteen, bilibili-live, bilibili-bangumi) are disabled by `patch_bison.py`.
 
-**Monkey-patching pattern:** `patch_bison.py` directly modifies installed nonebot-bison source files inside `.venv/` to disable unused platforms, fix bugs, add proxy support, and improve error messages. This is not imported at runtime — it's run manually after dependency installation. Must be re-applied after any `pip install` or upgrade of nonebot-bison.
+**Custom plugins** (`my_plugins/`): Lightweight NoneBot2 command handlers that route user commands into nonebot-bison's built-in subscription management. `help.py` provides the command list; `cookie_mgr.py` lists stored cookies with their validation status and subscription associations.
+
+**Monkey-patching pattern:** `patch_bison.py` (21 steps) directly modifies installed nonebot-bison source files inside `.venv/` — it replaces metrics imports with safe fallbacks, disables 7+ unused platforms, fixes weibo target parsing and cookie handling, injects proxy configuration for weibo API calls, and improves Chinese-language error messages throughout the bison subscription UI. It is not imported at runtime — run manually after dependency installation and must be re-applied after any `pip install` or upgrade of nonebot-bison.
 
 ## Key Configuration
 
@@ -62,7 +67,10 @@ Pushing to `main` triggers `.github/workflows/deploy.yml` → SSH to Ubuntu serv
 
 ## Conventions
 
+- Python 3.10+ required
 - Chinese command names for user-facing QQ interactions (添加订阅, 查看订阅, etc.)
 - Weibo requires authenticated cookies (JSON or HTTP `key=value;` format) — managed via QQ commands
 - Weibo API requests go through local proxy at `127.0.0.1:7890` (configured in `patch_bison.py`)
+- Playwright Chromium is used by nonebot-bison for HTML rendering (screenshots in QQ messages)
 - `data/` directory is gitignored — subscription database is runtime state, not version-controlled
+- `.env` is gitignored — use `.env.example` as template, create `.env` manually on server

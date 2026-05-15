@@ -13,9 +13,9 @@ async def handle_view_cookie(event: MessageEvent):
     try:
         cookies = await config.get_cookie(is_anonymous=False)
         targets = await config.get_cookie_target()
-    except (OSError, RuntimeError) as e:
+    except Exception as e:
         logger.error(f"获取 Cookie 列表失败: {e}")
-        await view_cookie_matcher.finish(Message("获取 Cookie 列表失败"))
+        await view_cookie_matcher.finish(Message("获取 Cookie 列表失败，请稍后重试"))
 
     if not cookies:
         await view_cookie_matcher.finish(Message("暂无已添加的 Cookie"))
