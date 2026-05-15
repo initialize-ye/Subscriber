@@ -10,8 +10,10 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Auto-detect bison package path
+# Auto-detect bison package path (cross-platform)
 _VENV_SITE = PROJECT_ROOT / ".venv" / "Lib" / "site-packages" / "nonebot_bison"
+if not _VENV_SITE.is_dir():
+    _VENV_SITE = PROJECT_ROOT / ".venv" / "lib" / "site-packages" / "nonebot_bison"
 if _VENV_SITE.is_dir():
     BISON_BASE = str(_VENV_SITE)
 else:

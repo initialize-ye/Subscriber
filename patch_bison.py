@@ -2,28 +2,33 @@
 
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 
-# Auto-detect bison package path: prefer .venv in project root, fallback to sys.prefix
+# Auto-detect bison package path: prefer .venv in project root, fallback to importlib
 _project_root = Path(__file__).resolve().parent
 _venv_site = _project_root / ".venv" / "Lib" / "site-packages" / "nonebot_bison"
+if not _venv_site.is_dir():
+    _venv_site = _project_root / ".venv" / "lib" / "site-packages" / "nonebot_bison"
 if _venv_site.is_dir():
     BASE = str(_venv_site)
 else:
-    # Fallback for production Ubuntu server
-    BASE = "/home/ubuntu/Subscriber/.venv/lib/python3.12/site-packages/nonebot_bison"
-    if not os.path.isdir(BASE):
-        # Last resort: resolve from import
-        import importlib.util as _util
-        _spec = _util.find_spec("nonebot_bison")
-        if _spec and _spec.origin:
-            BASE = str(Path(_spec.origin).parent)
-        else:
-            print("ERROR: cannot find nonebot_bison package")
-            sys.exit(1)
+    import importlib.util as _util
+    _spec = _util.find_spec("nonebot_bison")
+    if _spec and _spec.origin:
+        BASE = str(Path(_spec.origin).parent)
+    else:
+        print("ERROR: cannot find nonebot_bison package")
+        sys.exit(1)
 
 TOTAL_STEPS = 38
+
+# Proxy for weibo API requests (configurable via WEIBO_PROXY env var)
+WEIBO_PROXY = os.environ.get("WEIBO_PROXY", "http://127.0.0.1:7890")
+
+# Backup tracking for rollback support
+_backups: dict[str, str] = {}
 
 
 def _read(path: str) -> str:
@@ -32,8 +37,27 @@ def _read(path: str) -> str:
 
 
 def _write(path: str, content: str) -> None:
-    with open(path, "w") as f:
-        f.write(content)
+    # Backup before first write to each file
+    if path not in _backups and os.path.isfile(path):
+        _backups[path] = _read(path)
+    try:
+        with open(path, "w") as f:
+            f.write(content)
+    except OSError as e:
+        print(f"ERROR: failed to write {path}: {e}")
+        _rollback()
+        sys.exit(1)
+
+
+def _rollback() -> None:
+    """Restore all backed-up files on failure."""
+    for path, content in _backups.items():
+        try:
+            with open(path, "w") as f:
+                f.write(content)
+        except OSError:
+            print(f"WARN: failed to restore {path}")
+    print(f"Rolled back {len(_backups)} files")
 
 
 def _assert_patched(content: str, old: str, name: str) -> None:
@@ -184,10 +208,10 @@ _step(5, "weibo cookie format fix applied")
 # Step 6: Add proxy to _get_current_user_name
 weibo = weibo.replace(
     'async with http_client() as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)',
-    'async with http_client(proxy="http://127.0.0.1:7890") as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)',
+    f'async with http_client(proxy="{WEIBO_PROXY}") as client:\n            r = await client.get(url, headers=_HEADER, cookies=cookies)',
 )
 _step(6, "weibo _get_current_user_name proxy applied")
-_assert_not_patched(weibo, 'http_client(proxy="http://127.0.0.1:7890")', "step 6")
+_assert_not_patched(weibo, f'http_client(proxy="{WEIBO_PROXY}")', "step 6")
 
 # Step 7: Add proxy to get_query_name_client
 old_block = """    @override
@@ -208,27 +232,27 @@ old_block = """    @override
 
         return client"""
 
-new_block = """    @override
+new_block = f"""    @override
     async def get_client(self, target: Target | None) -> AsyncClient:
         client = await super().get_client(target)
 
         if len(client.cookies) == 0:
-            client.cookies.update({"dummycookie": "1"})
+            client.cookies.update({{"dummycookie": "1"}})
 
         return client
 
     @classmethod
     async def get_query_name_client(cls) -> AsyncClient:
-        client = http_client(proxy="http://127.0.0.1:7890")
+        client = http_client(proxy="{WEIBO_PROXY}")
 
         if len(client.cookies) == 0:
-            client.cookies.update({"dummycookie": "1"})
+            client.cookies.update({{"dummycookie": "1"}})
 
         return client"""
 
 if old_block in weibo:
     weibo = weibo.replace(old_block, new_block)
-    _assert_not_patched(weibo, 'http_client(proxy="http://127.0.0.1:7890")\n\n        if len(client.cookies) == 0', "step 7")
+    _assert_not_patched(weibo, f'http_client(proxy="{WEIBO_PROXY}")\n\n        if len(client.cookies) == 0', "step 7")
     _step(7, "weibo proxy configured")
 else:
     _step(7, "weibo proxy SKIP (pattern not found)")
