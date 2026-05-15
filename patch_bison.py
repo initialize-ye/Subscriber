@@ -23,7 +23,7 @@ else:
             print("ERROR: cannot find nonebot_bison package")
             sys.exit(1)
 
-TOTAL_STEPS = 23
+TOTAL_STEPS = 26
 
 
 def _read(path: str) -> str:
@@ -132,7 +132,7 @@ parse_end = weibo.find("\n    async def get_sub_list", weibo.find(old_parse))
 new_parse = (
     "    @classmethod\n"
     "    async def parse_target(cls, target_text: str) -> Target:\n"
-    '        if re.match(r"\\d+", target_text):\n'
+    '        if re.match(r"^\\d+$", target_text):\n'
     "            return Target(target_text)\n"
     '        elif match := re.match(r"(?:https?://)?weibo\\.com/u/(\\d+)", target_text):\n'
     "            return Target(match.group(1))\n"
@@ -491,5 +491,38 @@ if 'except ValueError' not in del_cookie_target2:
     del_cookie_target2 = del_cookie_target2.replace(old_dct_err, new_dct_err)
     _write(del_cookie_target_path, del_cookie_target2)
 _step(23, "del_cookie_target.py input validation added")
+
+# ====== 24. Fix weibo longTextContent KeyError crash ======
+weibo_path2 = os.path.join(BASE, "platform/weibo.py")
+weibo2 = _read(weibo_path2)
+old_long_text = '            info["text"] = (await self._get_long_weibo(info["mid"]))["longTextContent"]'
+new_long_text = (
+    "            long_data = await self._get_long_weibo(info[\"mid\"])\n"
+    '            if "longTextContent" in long_data:\n'
+    '                info["text"] = long_data["longTextContent"]'
+)
+if old_long_text in weibo2:
+    weibo2 = weibo2.replace(old_long_text, new_long_text)
+    _write(weibo_path2, weibo2)
+_step(24, "weibo longTextContent KeyError fix applied")
+
+# ====== 25. Fix weibo parse_target regex (anchor end) ======
+weibo3 = _read(weibo_path2)
+weibo3 = weibo3.replace(
+    'if re.match(r"\\d+", target_text):',
+    'if re.match(r"^\\d+$", target_text):',
+)
+_write(weibo_path2, weibo3)
+_step(25, "weibo parse_target regex anchored")
+
+# ====== 26. Fix weibo br.tail dead code ======
+weibo4 = _read(weibo_path2)
+if 'selector.xpath("br")' in weibo4:
+    weibo4 = weibo4.replace(
+        'for br in selector.xpath("br"):\n            br.tail = "\\n" + br.tail',
+        'for br in selector.xpath("//br"):\n            if br.tail:\n                br.tail = "\\n" + br.tail',
+    )
+    _write(weibo_path2, weibo4)
+_step(26, "weibo br.tail xpath fixed")
 
 print("\nAll patches applied!")
