@@ -26,13 +26,16 @@ python -m py_compile my_plugins/help.py
 python -m py_compile my_plugins/cookie_mgr.py
 python -m py_compile patch_bison.py
 
+# Run tests
+python -m pytest tests/ -q
+
 # Production service management
 sudo systemctl status subscriber
 sudo systemctl restart subscriber
 sudo journalctl -u subscriber -f
 ```
 
-No formal test suite or linter is configured. CI uses `py_compile` as the smoke test.
+Tests use pytest (`python -m pytest tests/ -q`). CI runs `py_compile` as a smoke test and `pytest` for patch verification before deployment.
 
 ## Architecture
 
@@ -46,7 +49,7 @@ No formal test suite or linter is configured. CI uses `py_compile` as the smoke 
 
 **Custom plugins** (`my_plugins/`): Lightweight NoneBot2 command handlers that route user commands into nonebot-bison's built-in subscription management. `help.py` provides the command list; `cookie_mgr.py` lists stored cookies with their validation status and subscription associations.
 
-**Monkey-patching pattern:** `patch_bison.py` (21 steps) directly modifies installed nonebot-bison source files inside `.venv/` — it replaces metrics imports with safe fallbacks, disables 7+ unused platforms, fixes weibo target parsing and cookie handling, injects proxy configuration for weibo API calls, and improves Chinese-language error messages throughout the bison subscription UI. It is not imported at runtime — run manually after dependency installation and must be re-applied after any `pip install` or upgrade of nonebot-bison.
+**Monkey-patching pattern:** `patch_bison.py` (37 steps) directly modifies installed nonebot-bison source files inside `.venv/` — it replaces metrics imports with safe fallbacks, disables 7+ unused platforms, fixes weibo target parsing and cookie handling, injects proxy configuration for weibo API calls, and improves Chinese-language error messages throughout the bison subscription UI. It is not imported at runtime — run manually after dependency installation and must be re-applied after any `pip install` or upgrade of nonebot-bison.
 
 ## Key Configuration
 
@@ -63,7 +66,7 @@ All runtime config lives in `.env` (loaded by python-dotenv before NoneBot init)
 
 ## Deployment
 
-Pushing to `main` triggers `.github/workflows/deploy.yml` → SSH to Ubuntu server → pull code → restore `.env` and `data/` → `pip install` → `py_compile` check → restart systemd service. Auto-rolls back on failure.
+Pushing to `main` triggers `.github/workflows/deploy.yml` (12-step pipeline) → SSH to Ubuntu server → pull code → restore `.env` and `data/` → `pip install` → `pytest` → `py_compile` check → restart systemd service. Auto-rolls back on failure.
 
 ## Conventions
 
