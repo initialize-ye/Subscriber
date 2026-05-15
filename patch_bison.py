@@ -23,7 +23,7 @@ else:
             print("ERROR: cannot find nonebot_bison package")
             sys.exit(1)
 
-TOTAL_STEPS = 26
+TOTAL_STEPS = 31
 
 
 def _read(path: str) -> str:
@@ -111,7 +111,11 @@ for name in ["bilibili-live", "bilibili-bangumi"]:
     idx = bili_content.find(f'platform_name = "{name}"')
     if idx == -1:
         continue
-    segment = bili_content[idx : idx + 200]
+    # Scan to next class definition or end of file
+    next_class = bili_content.find("\nclass ", idx + 1)
+    if next_class == -1:
+        next_class = len(bili_content)
+    segment = bili_content[idx:next_class]
     new_segment = segment.replace("enabled = True", "enabled = False")
     new_segment = new_segment.replace("is_common = True", "is_common = False")
     bili_content = bili_content.replace(segment, new_segment)
@@ -524,5 +528,65 @@ if 'selector.xpath("br")' in weibo4:
     )
     _write(weibo_path2, weibo4)
 _step(26, "weibo br.tail xpath fixed")
+
+# ====== 27. Fix bilibili parse_target regex (anchor end) ======
+bili2 = _read(bili_path)
+bili2 = bili2.replace(
+    'if re.match(r"\\d+", target_text):',
+    'if re.match(r"^\\d+$", target_text):',
+)
+bili2 = bili2.replace(
+    'if re.match(r"\\d+", target_string):',
+    'if re.match(r"^\\d+$", target_string):',
+)
+_write(bili_path, bili2)
+_step(27, "bilibili parse_target regex anchored")
+
+# ====== 28. Fix bilibili bangumi fallback (list vs dict) ======
+bili3 = _read(bili_path)
+if 'lastest_episode = detail_dict["result"]["episodes"]' in bili3:
+    bili3 = bili3.replace(
+        'lastest_episode = detail_dict["result"]["episodes"]',
+        'lastest_episode = detail_dict["result"]["episodes"][0]',
+    )
+    _write(bili_path, bili3)
+_step(28, "bilibili bangumi fallback fixed")
+
+# ====== 29. Fix db_config null checks ======
+db_path = os.path.join(BASE, "config/db_config.py")
+db = _read(db_path)
+# del_subscribe null check (idempotent: only add if not already present)
+if "if not user_obj or not target_obj:" not in db:
+    db = db.replace(
+        "            await session.execute(delete(Subscribe).where(Subscribe.user == user_obj, Subscribe.target == target_obj))\n",
+        "            if not user_obj or not target_obj:\n                return\n            await session.execute(delete(Subscribe).where(Subscribe.user == user_obj, Subscribe.target == target_obj))\n",
+    )
+# update_subscribe null check
+if "if not subscribe_obj:" not in db:
+    db = db.replace(
+        "            subscribe_obj.tags = tags  # type:ignore\n",
+        "            if not subscribe_obj:\n                return\n            subscribe_obj.tags = tags  # type:ignore\n",
+    )
+_write(db_path, db)
+_step(29, "db_config null checks added")
+
+# ====== 30. Fix add_cookie_target broad except ======
+add_ct_path = os.path.join(BASE, "sub_manager/add_cookie_target.py")
+add_ct = _read(add_ct_path)
+add_ct = add_ct.replace(
+    '        except Exception:\n            await add_cookie_target_matcher.reject("序号错误")',
+    '        except (ValueError, KeyError, IndexError):\n            await add_cookie_target_matcher.reject("请输入正确的数字序号")',
+)
+_write(add_ct_path, add_ct)
+_step(30, "add_cookie_target error handling improved")
+
+# ====== 31. Fix get_all_weight_config defaultdict bug ======
+db2 = _read(db_path)
+db2 = db2.replace(
+    '            if platform_name not in res.keys():',
+    '            if target.target not in res[platform_name]:',
+)
+_write(db_path, db2)
+_step(31, "weight config defaultdict bug fixed")
 
 print("\nAll patches applied!")

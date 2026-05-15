@@ -132,15 +132,22 @@ jobs:
 
             # 8. 语法检查（所有 Python 文件）
             echo -e "\n${GREEN}[8/10] 语法检查${NC}"
-            for pyfile in bot.py my_plugins/help.py my_plugins/cookie_mgr.py patch_bison.py; do
-              if "$PROJECT_DIR/.venv/bin/python" -m py_compile "$PROJECT_DIR/$pyfile" 2>/dev/null; then
-                echo "  ✓ $pyfile"
+            FAIL=0
+            for pyfile in $(find "$PROJECT_DIR" -maxdepth 3 -name '*.py' -not -path '*/.venv/*' -not -path '*/__pycache__/*' | sort); do
+              relpath="${pyfile#$PROJECT_DIR/}"
+              if "$PROJECT_DIR/.venv/bin/python" -m py_compile "$pyfile" 2>/dev/null; then
+                echo "  ✓ $relpath"
               else
-                echo -e "${RED}  ✗ $pyfile 语法错误，回滚部署${NC}"
-                git reset --hard "$CURRENT_COMMIT"
-                exit 1
+                echo -e "${RED}  ✗ $relpath 语法错误${NC}"
+                FAIL=1
               fi
             done
+            if [ "$FAIL" -eq 1 ]; then
+              echo -e "${RED}语法检查失败，回滚部署${NC}"
+              git reset --hard "$CURRENT_COMMIT"
+              restore_runtime
+              exit 1
+            fi
 
             # 9. 检查配置
             echo -e "\n${GREEN}[9/10] 检查配置${NC}"
