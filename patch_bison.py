@@ -23,7 +23,7 @@ else:
             print("ERROR: cannot find nonebot_bison package")
             sys.exit(1)
 
-TOTAL_STEPS = 35
+TOTAL_STEPS = 37
 
 
 def _read(path: str) -> str:
@@ -636,5 +636,30 @@ if 'query_dict: dict = {}' in utils_init:
     )
     _write(utils_init_path, utils_init)
 _step(35, "html_to_text mutable default fixed")
+
+# ====== 36. Fix bilibili scheduler IndexError on empty anonymous cookie ======
+bili_sched_path = os.path.join(BASE, "platform/bilibili/scheduler.py")
+bili_sched = _read(bili_sched_path)
+if "(await config.get_cookie(self._site_name, is_anonymous=True))[0]" in bili_sched:
+    bili_sched = bili_sched.replace(
+        "return (await config.get_cookie(self._site_name, is_anonymous=True))[0]",
+        "anon_cookies = await config.get_cookie(self._site_name, is_anonymous=True)\n"
+        '        if not anon_cookies:\n'
+        '            raise ValueError(f"平台 {self._site_name} 没有可用的匿名 Cookie")\n'
+        "        return anon_cookies[0]",
+    )
+    _write(bili_sched_path, bili_sched)
+_step(36, "bilibili scheduler IndexError fix applied")
+
+# ====== 37. Fix jwt.py deprecated utcnow() ======
+jwt_path = os.path.join(BASE, "admin_page/jwt.py")
+jwt = _read(jwt_path)
+if "datetime.datetime.utcnow()" in jwt:
+    jwt = jwt.replace(
+        "datetime.datetime.utcnow()",
+        "datetime.datetime.now(datetime.timezone.utc)",
+    )
+    _write(jwt_path, jwt)
+_step(37, "jwt.py utcnow() deprecation fixed")
 
 print("\nAll patches applied!")
